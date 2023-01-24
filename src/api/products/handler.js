@@ -1,4 +1,3 @@
-/* eslint-disable class-methods-use-this */
 const { default: axios } = require("axios")
 
 class ProductsHandler {

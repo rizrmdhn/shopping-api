@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 require('dotenv').config()
 
 const Hapi = require('@hapi/hapi');
@@ -11,8 +12,22 @@ const check = require('./api/check');
 // products plugin
 const products = require('./api/products');
 
+// users plugin
+const users = require('./api/users');
+const UsersService = require('./services/postgres/UserService');
+const UsersValidator = require('./validator/users')
+
+// authentications plugin
+const authentications = require('./api/authentications');
+const AuthenticationsService = require('./services/postgres/AuthenticationsService');
+const TokenManager = require('./tokenize/tokenManager');
+const AuthenticationsValidator = require('./validator/authentications');
+
 
 const init = async () => {
+    const userService = new UsersService();
+    const authenticationsService = new AuthenticationsService();
+
     const server = Hapi.server({
         port: process.env.PORT,
         host: process.env.HOST !== 'production' ? 'localhost' : '0.0.0.0',
@@ -25,6 +40,33 @@ const init = async () => {
 
 
 
+    // plugin jwt and inert
+    await server.register([
+        {
+            plugin: Jwt,
+        },
+        {
+            plugin: Inert,
+        },
+    ]);
+
+    // server auth strategy
+    server.auth.strategy('shopping_jwt', 'jwt', {
+        keys: process.env.ACCESS_TOKEN_KEY,
+        verify: {
+            aud: false,
+            iss: false,
+            sub: false,
+            maxAgeSec: process.env.ACCESS_TOKEN_AGE,
+        },
+        validate: (artifacts) => ({
+            isValid: true,
+            credentials: {
+                id: artifacts.decoded.payload.id,
+            },
+        }),
+    });
+
     // external plugin
     await server.register([
         {
@@ -32,6 +74,22 @@ const init = async () => {
         },
         {
             plugin: products,
+        },
+        {
+            plugin: users,
+            options: {
+                service: userService,
+                validator: UsersValidator,
+            }
+        },
+        {
+            plugin: authentications,
+            options: {
+                authenticationsService,
+                usersService: userService,
+                tokenManager: TokenManager,
+                validator: AuthenticationsValidator,
+            }
         },
     ])
 
